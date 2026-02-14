@@ -10,3 +10,4 @@ demo/hard_spheres/output_minkowski
 demo/hard_spheres/polys
 demo/hexagonal_minimal_surface/output_minkowski
 libkarambola.a
+.DS_Store
