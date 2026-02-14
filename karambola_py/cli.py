@@ -9,6 +9,8 @@ import numpy as np
 from .triangulation import Triangulation
 from .io_poly import parse_poly_file
 from .io_off import parse_off_file, is_off_file
+from .io_obj import parse_obj_file, is_obj_file
+from .io_glb import parse_glb_file, is_glb_file
 from .results import CalcOptions, CALC_FORCED, CANT_CALC, REFERENCE_ORIGIN, REFERENCE_CENTROID
 from .surface import check_surface
 from .minkowski import (
@@ -87,7 +89,7 @@ def main(argv=None):
         prog="karambola_py",
     )
     parser.add_argument("-i", "--input", dest="infile", required=True,
-                        help="Input file (.poly or .off)")
+                        help="Input file (.poly, .off, .obj, .glb, or .gltf)")
     parser.add_argument("-o", "--output", dest="outfolder", default=None,
                         help="Output directory")
     group = parser.add_mutually_exclusive_group(required=True)
@@ -117,6 +119,12 @@ def main(argv=None):
         co.outfoldername = co.infilename[:-5] + "_mink_val"
     elif co.infilename.endswith(".off"):
         co.outfoldername = co.infilename[:-4] + "_mink_val"
+    elif co.infilename.endswith(".obj"):
+        co.outfoldername = co.infilename[:-4] + "_mink_val"
+    elif co.infilename.endswith(".glb"):
+        co.outfoldername = co.infilename[:-4] + "_mink_val"
+    elif co.infilename.endswith(".gltf"):
+        co.outfoldername = co.infilename[:-5] + "_mink_val"
     else:
         print("No output folder can be defined", file=sys.stderr)
         sys.exit(1)
@@ -137,6 +145,10 @@ def main(argv=None):
     with_labels = co.labels_set
     if is_off_file(co.infilename):
         surface = parse_off_file(co.infilename, with_labels)
+    elif is_obj_file(co.infilename):
+        surface = parse_obj_file(co.infilename, with_labels)
+    elif is_glb_file(co.infilename):
+        surface = parse_glb_file(co.infilename, with_labels)
     else:
         surface = parse_poly_file(co.infilename, with_labels)
 

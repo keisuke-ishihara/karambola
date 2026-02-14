@@ -1,13 +1,16 @@
 """
-Tests for .poly and .off file readers.
+Tests for .poly, .off, .obj, and .glb file readers.
 """
 
 import os
+import tempfile
 import pytest
 import numpy as np
 
 from karambola_py.io_poly import parse_poly_file
 from karambola_py.io_off import parse_off_file, is_off_file
+from karambola_py.io_obj import parse_obj_file, is_obj_file
+from karambola_py.io_glb import parse_glb_file, is_glb_file
 from karambola_py.triangulation import LABEL_UNASSIGNED
 from karambola_py.surface import check_surface
 from karambola_py.results import CalcOptions
@@ -88,3 +91,78 @@ class TestOffReader:
         assert is_off_file("test.OFF")
         assert not is_off_file("test.poly")
         assert not is_off_file("test.txt")
+
+
+class TestObjReader:
+    """Tests for .obj file parsing."""
+
+    def test_box_obj(self):
+        """Read box.obj and verify vertex/triangle counts."""
+        filepath = os.path.join(TEST_INPUTS, "box.obj")
+        surface = parse_obj_file(filepath)
+        assert surface.n_vertices() == 8
+        assert surface.n_triangles() == 12
+
+    def test_box_obj_volume(self):
+        """Read box.obj and verify volume = 24."""
+        filepath = os.path.join(TEST_INPUTS, "box.obj")
+        surface = parse_obj_file(filepath)
+        surface.create_vertex_polygon_lookup_table()
+        surface.create_polygon_polygon_lookup_table()
+        w000 = calculate_w000(surface)
+        assert w000[LABEL_UNASSIGNED].result == pytest.approx(24.0, rel=1e-4)
+
+    def test_is_obj_file(self):
+        assert is_obj_file("test.obj")
+        assert is_obj_file("test.OBJ")
+        assert not is_obj_file("test.poly")
+        assert not is_obj_file("test.off")
+
+
+class TestGlbReader:
+    """Tests for .glb file parsing."""
+
+    @pytest.fixture
+    def box_glb(self, tmp_path):
+        """Create a GLB fixture of the same box via trimesh."""
+        trimesh = pytest.importorskip("trimesh")
+        vertices = np.array([
+            [ 1.0, -1.5,  2.0],
+            [-1.0, -1.5,  2.0],
+            [ 1.0,  1.5,  2.0],
+            [-1.0,  1.5,  2.0],
+            [-1.0, -1.5, -2.0],
+            [ 1.0, -1.5, -2.0],
+            [-1.0,  1.5, -2.0],
+            [ 1.0,  1.5, -2.0],
+        ])
+        faces = np.array([
+            [3, 1, 0], [2, 3, 0], [7, 5, 4], [6, 7, 4],
+            [2, 7, 6], [3, 2, 6], [1, 4, 5], [0, 1, 5],
+            [2, 0, 5], [7, 2, 5], [6, 4, 1], [3, 6, 1],
+        ])
+        mesh = trimesh.Trimesh(vertices=vertices, faces=faces)
+        filepath = str(tmp_path / "box.glb")
+        mesh.export(filepath)
+        return filepath
+
+    def test_box_glb(self, box_glb):
+        """Read GLB box and verify vertex/triangle counts."""
+        surface = parse_glb_file(box_glb)
+        assert surface.n_vertices() == 8
+        assert surface.n_triangles() == 12
+
+    def test_box_glb_volume(self, box_glb):
+        """Read GLB box and verify volume = 24."""
+        surface = parse_glb_file(box_glb)
+        surface.create_vertex_polygon_lookup_table()
+        surface.create_polygon_polygon_lookup_table()
+        w000 = calculate_w000(surface)
+        assert w000[LABEL_UNASSIGNED].result == pytest.approx(24.0, rel=1e-4)
+
+    def test_is_glb_file(self):
+        assert is_glb_file("test.glb")
+        assert is_glb_file("test.gltf")
+        assert is_glb_file("test.GLB")
+        assert not is_glb_file("test.obj")
+        assert not is_glb_file("test.off")

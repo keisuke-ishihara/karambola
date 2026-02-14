@@ -6,6 +6,8 @@ Minkowski functionals and tensors on 3D triangulated surfaces.
 from .triangulation import Triangulation, LABEL_UNASSIGNED, NEIGHBOUR_UNASSIGNED
 from .io_poly import parse_poly_file
 from .io_off import parse_off_file
+from .io_obj import parse_obj_file
+from .io_glb import parse_glb_file
 from .minkowski import (
     calculate_w000, calculate_w100, calculate_w200, calculate_w300,
     calculate_w010, calculate_w110, calculate_w210, calculate_w310,
