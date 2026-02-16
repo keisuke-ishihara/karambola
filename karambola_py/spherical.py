@@ -2,6 +2,9 @@
 Spherical Minkowski functionals using spherical harmonics.
 """
 
+import math
+from functools import lru_cache
+
 import numpy as np
 try:
     from scipy.special import sph_harm_y
@@ -13,6 +16,57 @@ except ImportError:
 from .results import MinkValResult
 
 MAX_L = 8
+
+
+@lru_cache(maxsize=None)
+def _wigner3j(j1, j2, j3, m1, m2, m3):
+    """Wigner 3j symbol via the Racah formula.
+
+    All arguments must be integers (not half-integers).
+    Sufficient for l <= 8 used in spherical Minkowski tensors.
+    """
+    # Selection rules
+    if m1 + m2 + m3 != 0:
+        return 0.0
+    if abs(m1) > j1 or abs(m2) > j2 or abs(m3) > j3:
+        return 0.0
+    if j3 < abs(j1 - j2) or j3 > j1 + j2:
+        return 0.0
+    J = j1 + j2 + j3
+    if J % 2 != 0:
+        return 0.0
+
+    # Triangle coefficient
+    def _triangle(a, b, c):
+        return (math.factorial(a + b - c)
+                * math.factorial(a - b + c)
+                * math.factorial(-a + b + c)
+                / math.factorial(a + b + c + 1))
+
+    tri = _triangle(j1, j2, j3)
+    prefactor = ((-1) ** (j1 - j2 - m3)
+                 * math.sqrt(tri
+                             * math.factorial(j1 + m1)
+                             * math.factorial(j1 - m1)
+                             * math.factorial(j2 + m2)
+                             * math.factorial(j2 - m2)
+                             * math.factorial(j3 + m3)
+                             * math.factorial(j3 - m3)))
+
+    # Sum over t
+    t_min = max(0, j2 - j3 - m1, j1 - j3 + m2)
+    t_max = min(j1 + j2 - j3, j1 - m1, j2 + m2)
+    s = 0.0
+    for t in range(t_min, t_max + 1):
+        s += ((-1) ** t
+              / (math.factorial(t)
+                 * math.factorial(j1 + j2 - j3 - t)
+                 * math.factorial(j1 - m1 - t)
+                 * math.factorial(j2 + m2 - t)
+                 * math.factorial(j3 - j2 + m1 + t)
+                 * math.factorial(j3 - j1 - m2 + t)))
+
+    return prefactor * s
 
 
 class SphMinkData:
@@ -85,11 +139,6 @@ class SphericalMinkowskis:
 
     def wl(self, l):
         """Compute w_l rotation invariant using Wigner 3j symbols."""
-        try:
-            from sympy.physics.wigner import wigner_3j
-        except ImportError:
-            return 0.0
-
         v = 0.0 + 0.0j
 
         for ma in range(-l, l + 1):
@@ -99,7 +148,7 @@ class SphericalMinkowskis:
                     continue
 
                 # Wigner 3j symbol
-                w3j = float(wigner_3j(l, l, l, ma, mb, mc))
+                w3j = _wigner3j(l, l, l, ma, mb, mc)
                 if w3j == 0.0:
                     continue
 
