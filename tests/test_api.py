@@ -7,7 +7,7 @@ import math
 import numpy as np
 import pytest
 
-from karambola_py.api import minkowski_functionals, minkowski_functionals_from_label_image
+from pykarambola.api import minkowski_functionals, minkowski_functionals_from_label_image
 
 
 def _box_mesh(a, b, c):

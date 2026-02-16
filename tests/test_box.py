@@ -7,17 +7,17 @@ import math
 import numpy as np
 import pytest
 
-from karambola_py.triangulation import LABEL_UNASSIGNED
-from karambola_py.io_poly import parse_poly_file
-from karambola_py.surface import check_surface
-from karambola_py.results import CalcOptions
-from karambola_py.minkowski import (
+from pykarambola.triangulation import LABEL_UNASSIGNED
+from pykarambola.io_poly import parse_poly_file
+from pykarambola.surface import check_surface
+from pykarambola.results import CalcOptions
+from pykarambola.minkowski import (
     calculate_w000, calculate_w100, calculate_w200, calculate_w300,
     calculate_w010, calculate_w110, calculate_w210, calculate_w310,
     calculate_w020, calculate_w120, calculate_w220, calculate_w320,
     calculate_w102, calculate_w202,
 )
-from karambola_py.eigensystem import calculate_eigensystem
+from pykarambola.eigensystem import calculate_eigensystem
 
 TEST_INPUTS = os.path.join(os.path.dirname(__file__), "..", "test_suite", "inputs")
 

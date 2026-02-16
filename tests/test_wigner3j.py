@@ -2,7 +2,7 @@
 
 import math
 import pytest
-from karambola_py.spherical import _wigner3j
+from pykarambola.spherical import _wigner3j
 
 
 class TestSelectionRules:

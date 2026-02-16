@@ -9,7 +9,7 @@ from .results import LABEL_UNASSIGNED
 from .tensor import SymmetricRank4Tensor
 
 
-VERSION = "karambola_py 2.0"
+VERSION = "pykarambola 2.0"
 SW = 20  # column width
 
 

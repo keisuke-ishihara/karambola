@@ -7,14 +7,14 @@ import tempfile
 import pytest
 import numpy as np
 
-from karambola_py.io_poly import parse_poly_file
-from karambola_py.io_off import parse_off_file, is_off_file
-from karambola_py.io_obj import parse_obj_file, is_obj_file
-from karambola_py.io_glb import parse_glb_file, is_glb_file
-from karambola_py.triangulation import LABEL_UNASSIGNED
-from karambola_py.surface import check_surface
-from karambola_py.results import CalcOptions
-from karambola_py.minkowski import calculate_w000, calculate_w100
+from pykarambola.io_poly import parse_poly_file
+from pykarambola.io_off import parse_off_file, is_off_file
+from pykarambola.io_obj import parse_obj_file, is_obj_file
+from pykarambola.io_glb import parse_glb_file, is_glb_file
+from pykarambola.triangulation import LABEL_UNASSIGNED
+from pykarambola.surface import check_surface
+from pykarambola.results import CalcOptions
+from pykarambola.minkowski import calculate_w000, calculate_w100
 
 TEST_INPUTS = os.path.join(os.path.dirname(__file__), "..", "test_suite", "inputs")
 

@@ -1,5 +1,5 @@
 """
-karambola_py - Python implementation of the Karambola package for computing
+pykarambola - Python implementation of the Karambola package for computing
 Minkowski functionals and tensors on 3D triangulated surfaces.
 """
 
