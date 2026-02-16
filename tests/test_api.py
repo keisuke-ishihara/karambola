@@ -7,7 +7,7 @@ import math
 import numpy as np
 import pytest
 
-from karambola_py.api import minkowski_functionals
+from karambola_py.api import minkowski_functionals, minkowski_functionals_from_label_image
 
 
 def _box_mesh(a, b, c):
@@ -216,3 +216,83 @@ class TestMultiLabel:
         # Total volume should equal box volume
         total_vol = result[0]['w000'] + result[1]['w000']
         assert total_vol == pytest.approx(2.0 * 3.0 * 4.0, rel=1e-4)
+
+
+def _voxel_box(shape, box_slices):
+    """Create a 3D label image with a box region set to 1."""
+    vol = np.zeros(shape, dtype=np.int32)
+    vol[box_slices] = 1
+    return vol
+
+
+try:
+    import skimage  # noqa: F401
+    _has_skimage = True
+except ImportError:
+    _has_skimage = False
+
+
+@pytest.mark.skipif(not _has_skimage, reason='scikit-image not installed')
+class TestLabelImage:
+    """Tests for minkowski_functionals_from_label_image()."""
+
+    def test_single_label_returns_dict_keyed_by_label(self):
+        vol = _voxel_box((20, 20, 20), np.s_[5:15, 5:15, 5:15])
+        result = minkowski_functionals_from_label_image(vol)
+        assert isinstance(result, dict)
+        assert 1 in result
+        assert 'w000' in result[1]
+
+    def test_voxel_box_volume(self):
+        # 10x10x10 voxel box at unit spacing → volume ~ 1000
+        vol = _voxel_box((20, 20, 20), np.s_[5:15, 5:15, 5:15])
+        result = minkowski_functionals_from_label_image(vol)
+        assert result[1]['w000'] == pytest.approx(1000.0, rel=0.05)
+
+    def test_spacing_scales_volume(self):
+        vol = _voxel_box((20, 20, 20), np.s_[5:15, 5:15, 5:15])
+        r1 = minkowski_functionals_from_label_image(vol, spacing=(1, 1, 1))
+        r2 = minkowski_functionals_from_label_image(vol, spacing=(2, 2, 2))
+        # Volume scales by 2^3 = 8
+        assert r2[1]['w000'] == pytest.approx(8.0 * r1[1]['w000'], rel=0.01)
+
+    def test_spacing_scales_area(self):
+        vol = _voxel_box((20, 20, 20), np.s_[5:15, 5:15, 5:15])
+        r1 = minkowski_functionals_from_label_image(vol, spacing=(1, 1, 1))
+        r2 = minkowski_functionals_from_label_image(vol, spacing=(2, 2, 2))
+        # Area (w100) scales by 2^2 = 4
+        assert r2[1]['w100'] == pytest.approx(4.0 * r1[1]['w100'], rel=0.01)
+
+    def test_multi_label(self):
+        vol = np.zeros((30, 30, 30), dtype=np.int32)
+        vol[2:8, 2:8, 2:8] = 1
+        vol[15:25, 15:25, 15:25] = 2
+        result = minkowski_functionals_from_label_image(vol)
+        assert 1 in result
+        assert 2 in result
+        # Label 1: 6^3=216, Label 2: 10^3=1000
+        assert result[1]['w000'] == pytest.approx(216.0, rel=0.1)
+        assert result[2]['w000'] == pytest.approx(1000.0, rel=0.05)
+
+    def test_centroid_default_symmetric_vectors(self):
+        # Symmetric box → vectors should be near zero with centroid centering
+        vol = _voxel_box((20, 20, 20), np.s_[5:15, 5:15, 5:15])
+        result = minkowski_functionals_from_label_image(vol, center='centroid')
+        for name in ['w010', 'w110', 'w210', 'w310']:
+            np.testing.assert_allclose(
+                result[1][name], [0, 0, 0], atol=0.5,
+                err_msg=f"{name} should be near zero for centered symmetric box",
+            )
+
+    def test_center_none(self):
+        vol = _voxel_box((20, 20, 20), np.s_[5:15, 5:15, 5:15])
+        result = minkowski_functionals_from_label_image(vol, center=None)
+        assert 'w000' in result[1]
+        # With origin as center, vectors should NOT be zero (box not at origin)
+        w010_norm = np.linalg.norm(result[1]['w010'])
+        assert w010_norm > 1.0
+
+    def test_zero_labels_ignored(self):
+        vol = np.zeros((10, 10, 10), dtype=np.int32)
+        result = minkowski_functionals_from_label_image(vol)
+        assert len(result) == 0

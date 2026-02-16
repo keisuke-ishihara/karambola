@@ -2,6 +2,8 @@
 High-level API for computing Minkowski functionals from numpy arrays.
 """
 
+import warnings
+
 import numpy as np
 
 from .triangulation import Triangulation
@@ -202,6 +204,17 @@ def minkowski_functionals(verts, faces, labels=None, center=None, compute='stand
 
         per_label[label] = out
 
+    # Warn if any label has negative volume (likely inverted face winding)
+    if 'w000' in wanted:
+        for lab, out in per_label.items():
+            if 'w000' in out and out['w000'] < 0:
+                warnings.warn(
+                    f"Negative volume (w000={out['w000']:.6g}) detected"
+                    f"{f' for label {lab}' if labels is not None else ''}. "
+                    "This usually indicates inverted face winding (inward normals).",
+                    stacklevel=2,
+                )
+
     # Return flat dict for single-body case
     if labels is None:
         return per_label[0]
@@ -211,3 +224,88 @@ def minkowski_functionals(verts, faces, labels=None, center=None, compute='stand
 def _any_needed(wanted, names):
     """Check if any of the given names are in the wanted set."""
     return bool(wanted.intersection(names))
+
+
+def minkowski_functionals_from_label_image(
+    label_image, level=None, spacing=(1.0, 1.0, 1.0),
+    center='centroid', compute='standard',
+):
+    """Compute Minkowski functionals for each label in a 3D label image.
+
+    Parameters
+    ----------
+    label_image : (Z, Y, X) array_like of int
+        3D label image where each unique nonzero value identifies an object.
+    level : float or None
+        Isosurface level for marching_cubes. Default ``0.5`` (suitable for
+        binary masks).
+    spacing : tuple of float
+        ``(sz, sy, sx)`` voxel spacing passed to ``marching_cubes``.
+    center : None, 'centroid', or (3,) array_like
+        Reference point for position-dependent tensors.
+        ``'centroid'`` (default): use per-label voxel centroid.
+        ``None``: use the origin.
+        ``(3,)`` array: use an explicit point for all labels.
+    compute : str or list of str
+        Passed through to :func:`minkowski_functionals`.
+
+    Returns
+    -------
+    dict[int, dict]
+        Mapping from label value to a dict of Minkowski functionals.
+
+    Notes
+    -----
+    Requires *scikit-image* (``skimage.measure.marching_cubes``).
+    """
+    try:
+        from skimage.measure import marching_cubes
+    except ImportError:
+        raise ImportError(
+            "scikit-image is required for minkowski_functionals_from_label_image. "
+            "Install it with: pip install scikit-image"
+        )
+
+    label_image = np.asarray(label_image)
+    if level is None:
+        level = 0.5
+    spacing = tuple(float(s) for s in spacing)
+
+    unique_labels = np.unique(label_image)
+    unique_labels = unique_labels[unique_labels != 0]
+
+    results = {}
+    for lab in unique_labels:
+        lab = int(lab)
+        mask = (label_image == lab).astype(np.float64)
+
+        try:
+            verts, faces, _, _ = marching_cubes(mask, level=level, spacing=spacing)
+        except Exception as exc:
+            warnings.warn(
+                f"marching_cubes failed for label {lab}: {exc}",
+                stacklevel=2,
+            )
+            continue
+
+        # marching_cubes may produce inward-facing normals; ensure outward
+        # by checking the signed volume and flipping faces if negative.
+        v0 = verts[faces[:, 0]]
+        cross = np.cross(verts[faces[:, 1]] - v0, verts[faces[:, 2]] - v0)
+        signed_vol = np.sum(v0 * cross) / 6.0
+        if signed_vol < 0:
+            faces = faces[:, ::-1]
+
+        # Determine center for this label
+        if isinstance(center, str) and center == 'centroid':
+            voxel_coords = np.argwhere(label_image == lab)  # (N, 3)
+            centroid = voxel_coords.mean(axis=0) * np.array(spacing)
+            label_center = centroid
+        else:
+            label_center = center
+
+        results[lab] = minkowski_functionals(
+            verts, faces, center=label_center, compute=compute,
+        )
+
+    return results
