@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pykarambola"
+version = "0.1.0"
+description = "Python implementation of Karambola – Minkowski functionals and tensors on 3D triangulated surfaces"
+requires-python = ">=3.9"
+dependencies = [
+    "numpy",
+    "scipy",
+]
+
+[project.optional-dependencies]
+dev = ["pytest", "scikit-image"]
+
+[tool.setuptools.packages.find]
+include = ["pykarambola*"]
