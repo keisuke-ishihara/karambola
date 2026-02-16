@@ -11,6 +11,35 @@ NEIGHBOUR_UNASSIGNED = -200
 class Triangulation:
     """Stores a triangulated surface mesh with vertices, triangles, and labels."""
 
+    @classmethod
+    def from_arrays(cls, verts, faces, labels=None):
+        """Construct a Triangulation from numpy arrays.
+
+        Parameters
+        ----------
+        verts : (V, 3) array_like
+            Vertex positions.
+        faces : (F, 3) array_like
+            Triangle vertex indices.
+        labels : (F,) array_like or None
+            Per-face labels. If None, all faces get label 0.
+
+        Returns
+        -------
+        Triangulation
+        """
+        verts = np.asarray(verts, dtype=np.float64)
+        faces = np.asarray(faces, dtype=np.int64)
+        tri = cls()
+        for i in range(len(verts)):
+            tri.append_vertex(verts[i, 0], verts[i, 1], verts[i, 2], number_in_file=i)
+        for i in range(len(faces)):
+            lbl = int(labels[i]) if labels is not None else 0
+            tri.append_triangle(int(faces[i, 0]), int(faces[i, 1]), int(faces[i, 2]), label=lbl)
+        tri.create_vertex_polygon_lookup_table()
+        tri.create_polygon_polygon_lookup_table()
+        return tri
+
     def __init__(self):
         self._vertices = []          # list of (x, y, z)
         self._vertex_numbers = []    # original numbering from file
