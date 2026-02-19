@@ -6,6 +6,12 @@ Uses contiguous NumPy arrays for vectorized computation of Minkowski functionals
 
 import numpy as np
 
+try:
+    from ._accel import build_neighbour_table, build_vertex_triangles
+    _HAS_ACCEL = True
+except ImportError:
+    _HAS_ACCEL = False
+
 LABEL_UNASSIGNED = -300
 NEIGHBOUR_UNASSIGNED = -200
 
@@ -62,7 +68,9 @@ class Triangulation:
         self._faces = None           # (F, 3) int64
         self._labels = None          # (F,)   int64
         self._vertex_numbers = None  # (V,)   int64
-        self._vertex_triangles = []  # list of lists: triangles per vertex
+        self._vertex_triangles = []  # list of lists: triangles per vertex (fallback)
+        self._vt_offsets = None      # (V+1,) int64 CSR offsets (accel mode)
+        self._vt_indices = None      # (3F,) int64 CSR data (accel mode)
         self._neighbours = None      # (F, 3) int64
 
         # Precomputed geometry
@@ -115,33 +123,41 @@ class Triangulation:
     # ------------------------------------------------------------------
 
     def _build_vertex_polygon_lookup(self):
-        """Build vertex -> triangle list using arrays."""
+        """Build vertex -> triangle lookup using arrays."""
         V = len(self._verts)
         F = len(self._faces)
-        self._vertex_triangles = [[] for _ in range(V)]
-        for i in range(F):
-            for j in range(3):
-                self._vertex_triangles[self._faces[i, j]].append(i)
+        if _HAS_ACCEL and F > 0:
+            self._vt_offsets, self._vt_indices = build_vertex_triangles(
+                self._faces, F, V)
+            self._vertex_triangles = None  # CSR mode
+        else:
+            self._vt_offsets = None
+            self._vt_indices = None
+            self._vertex_triangles = [[] for _ in range(V)]
+            for i in range(F):
+                for j in range(3):
+                    self._vertex_triangles[self._faces[i, j]].append(i)
 
     def _build_polygon_polygon_lookup(self):
         """Build triangle neighbour table using edge hashing."""
         F = len(self._faces)
-        self._neighbours = np.full((F, 3), NEIGHBOUR_UNASSIGNED, dtype=np.int64)
-
-        # Build edge -> (triangle, local_edge_idx) dict
-        # Edge (v_j, v_{j+1}) is local edge j of triangle i
-        edge_map = {}
-        for i in range(F):
-            for j in range(3):
-                v0 = self._faces[i, j]
-                v1 = self._faces[i, (j + 1) % 3]
-                key = (min(v0, v1), max(v0, v1))
-                if key in edge_map:
-                    other_tri, other_edge = edge_map[key]
-                    self._neighbours[i, j] = other_tri
-                    self._neighbours[other_tri, other_edge] = i
-                else:
-                    edge_map[key] = (i, j)
+        if _HAS_ACCEL and F > 0:
+            self._neighbours = build_neighbour_table(
+                self._faces, F, NEIGHBOUR_UNASSIGNED)
+        else:
+            self._neighbours = np.full((F, 3), NEIGHBOUR_UNASSIGNED, dtype=np.int64)
+            edge_map = {}
+            for i in range(F):
+                for j in range(3):
+                    v0 = self._faces[i, j]
+                    v1 = self._faces[i, (j + 1) % 3]
+                    key = (min(v0, v1), max(v0, v1))
+                    if key in edge_map:
+                        other_tri, other_edge = edge_map[key]
+                        self._neighbours[i, j] = other_tri
+                        self._neighbours[other_tri, other_edge] = i
+                    else:
+                        edge_map[key] = (i, j)
 
     def create_vertex_polygon_lookup_table(self):
         """Public interface — consolidates lists then builds lookup."""
@@ -268,6 +284,8 @@ class Triangulation:
         return self._vertex_numbers_list[a]
 
     def get_triangles_of_vertex(self, a):
+        if self._vt_offsets is not None:
+            return self._vt_indices[self._vt_offsets[a]:self._vt_offsets[a + 1]]
         return self._vertex_triangles[a]
 
     def ith_neighbour_of_triangle(self, a, i):
