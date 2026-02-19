@@ -91,6 +91,30 @@ class SphericalMinkowskis:
                 self._d[(l, m)] = 0.0 + 0.0j
         self.total_area = 0.0
 
+    def add_facets_batch(self, normals, areas):
+        """Add contributions from multiple facets at once.
+
+        Parameters
+        ----------
+        normals : (N, 3) array — unit normals
+        areas : (N,) array — triangle areas
+        """
+        f = normals * areas[:, None]  # (N, 3)
+        f_norms = np.linalg.norm(f, axis=1)
+        safe_norms = np.where(f_norms > 0, f_norms, 1.0)
+        f_normalized = f / safe_norms[:, None]
+
+        cos_th = f_normalized[:, 2]
+        phi = np.arctan2(f_normalized[:, 1], f_normalized[:, 0])
+        theta = np.arccos(np.clip(cos_th, -1.0, 1.0))
+        self.total_area += float(np.sum(f_norms))
+
+        for l in range(MAX_L + 1):
+            l_prefactor = np.sqrt(4.0 * np.pi / (2 * l + 1))
+            for m in range(l + 1):
+                ylm = _sph_harm(m, l, phi, theta)  # (N,) complex
+                self._d[(l, m)] += np.sum(f_norms * l_prefactor * ylm)
+
     def add_facet(self, f):
         """Add a facet contribution (f = normal * area)."""
         area = np.linalg.norm(f)
@@ -102,32 +126,8 @@ class SphericalMinkowskis:
         for l in range(MAX_L + 1):
             l_prefactor = np.sqrt(4.0 * np.pi / (2 * l + 1))
             for m in range(l + 1):
-                # Use scipy's normalized associated Legendre functions
-                # sph_harm(m, l, phi, theta) where theta = polar angle
-                # But we need the real spherical harmonic Plm * exp(i*m*phi)
-                # gsl_sf_legendre_sphPlm returns the normalized Plm
-                # scipy.special.sph_harm(m, l, phi, theta) returns Y_l^m
-                # We need: Plm(cos_th) * exp(i*m*phi) * l_prefactor * area
-                # scipy's lpmv is unnormalized; use sph_harm directly
-
-                # sph_harm convention: Y_l^m(theta, phi) where theta is polar
                 theta = np.arccos(np.clip(cos_th, -1, 1))
                 ylm = _sph_harm(m, l, phi, theta)
-
-                # The C++ code uses:
-                #   leg = gsl_sf_legendre_sphPlm(l, m, cos_th) = sqrt((2l+1)/4pi * (l-m)!/(l+m)!) * Plm(cos_th)
-                #   ylm = leg * exp(i*m*phi)
-                # scipy sph_harm already computes:
-                #   Y_l^m = sqrt((2l+1)/4pi * (l-m)!/(l+m)!)) * Plm(cos_th) * exp(i*m*phi)
-                # So ylm from scipy is already the full Y_l^m.
-                # The C++ multiplies by l_prefactor = sqrt(4pi/(2l+1)), so:
-                #   contribution = area * l_prefactor * gsl_sf_legendre_sphPlm * exp(i*m*phi)
-                #                = area * l_prefactor * Y_l^m / exp(i*m*phi) * exp(i*m*phi) ... no
-                # Actually: Y_l^m = normalization * Plm * exp(i*m*phi)
-                # And gsl_sf_legendre_sphPlm = normalization * Plm  (same normalization)
-                # So gsl_sf_legendre_sphPlm * exp(i*m*phi) = Y_l^m
-                # Therefore: contribution = area * l_prefactor * Y_l^m
-
                 self._d[(l, m)] += area * l_prefactor * ylm
 
     def ql(self, l):
@@ -186,13 +186,14 @@ def calculate_sphmink(surface):
     results = {}
     data = {}
 
-    for k in range(surface.n_triangles()):
-        label = surface.label_of_triangle(k)
-        if label not in data:
-            data[label] = SphericalMinkowskis()
-        area = surface.area_of_triangle(k)
-        n = surface.normal_vector_of_triangle(k)
-        data[label].add_facet(n * area)
+    # Group triangles by label and batch-add facets
+    unique_labels = np.unique(surface._labels)
+    for lab in unique_labels:
+        lab = int(lab)
+        mask = surface._labels == lab
+        sm = SphericalMinkowskis()
+        sm.add_facets_batch(surface._normals[mask], surface._areas[mask])
+        data[lab] = sm
 
     for label, sm in data.items():
         r = _default_sphmink()
