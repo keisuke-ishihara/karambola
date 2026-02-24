@@ -14,3 +14,7 @@ libkarambola.a
 __pycache__/
 *.egg-info/
 .ipynb_checkpoints/
+build/
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
