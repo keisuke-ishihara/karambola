@@ -2,7 +2,6 @@
 Surface validation and statistics.
 """
 
-import math
 import numpy as np
 from .triangulation import NEIGHBOUR_UNASSIGNED
 from .results import SurfaceStatistics
@@ -28,54 +27,38 @@ def check_surface(calc_options, surface):
         raise RuntimeError("There are no polygons in your .poly file")
 
     # Initialize all labels as closed (status 0)
-    for i in range(surface.n_triangles()):
-        calc_options.create_label(surface.label_of_triangle(i), 0)
+    for lab in np.unique(surface._labels):
+        calc_options.create_label(int(lab), 0)
 
     # Check for shared edges (different labels on neighbours) -> status 1
-    for i in range(surface.n_triangles()):
-        for j in range(3):
-            nb = surface.ith_neighbour_of_triangle(i, j)
-            if nb != NEIGHBOUR_UNASSIGNED:
-                if surface.label_of_triangle(i) != surface.label_of_triangle(nb):
-                    calc_options.create_label(surface.label_of_triangle(i), 1)
+    nb = surface._neighbours  # (F, 3)
+    labels = surface._labels  # (F,)
+    mask_valid = nb != NEIGHBOUR_UNASSIGNED  # (F, 3)
+    # For each valid neighbour, check if labels differ
+    nb_clamped = np.where(mask_valid, nb, 0)  # safe indices for gather
+    nb_labels = labels[nb_clamped]  # (F, 3) — labels of neighbours
+    shared_edge = mask_valid & (labels[:, None] != nb_labels)  # (F, 3)
+    tri_with_shared = np.any(shared_edge, axis=1)
+    for lab in np.unique(labels[tri_with_shared]):
+        calc_options.create_label(int(lab), 1)
 
     # Check for open edges (no neighbour) -> status 2
-    for i in range(surface.n_triangles()):
-        for j in range(3):
-            if surface.ith_neighbour_of_triangle(i, j) == NEIGHBOUR_UNASSIGNED:
-                calc_options.create_label(surface.label_of_triangle(i), 2)
+    open_edge = np.any(nb == NEIGHBOUR_UNASSIGNED, axis=1)  # (F,)
+    for lab in np.unique(labels[open_edge]):
+        calc_options.create_label(int(lab), 2)
 
     # Edge length statistics
-    shortest_edge = math.inf
-    longest_edge = 0.0
-    for i in range(surface.n_triangles()):
-        for j in range(3):
-            v1 = surface.get_pos_of_vertex(surface.ith_vertex_of_triangle(i, j))
-            v2 = surface.get_pos_of_vertex(surface.ith_vertex_of_triangle(i, (j + 1) % 3))
-            e = np.linalg.norm(v1 - v2)
-            if e < shortest_edge:
-                shortest_edge = e
-            if e > longest_edge:
-                longest_edge = e
-    stats.shortest_edge = shortest_edge
-    stats.longest_edge = longest_edge
+    stats.shortest_edge = float(np.min(surface._edge_lengths))
+    stats.longest_edge = float(np.max(surface._edge_lengths))
 
     # Area statistics
-    smallest_area = math.inf
-    largest_area = 0.0
-    for i in range(surface.n_triangles()):
-        area = surface.area_of_triangle(i)
-        if area < smallest_area:
-            smallest_area = area
-        if area > largest_area:
-            largest_area = area
-    stats.smallest_area = smallest_area
-    stats.largest_area = largest_area
+    stats.smallest_area = float(np.min(surface._areas))
+    stats.largest_area = float(np.max(surface._areas))
 
-    if largest_area > 0 and smallest_area / largest_area < 1e-12:
+    if stats.largest_area > 0 and stats.smallest_area / stats.largest_area < 1e-12:
         print(f"\nWARNING: there is something wrong with the area of your facets!")
-        print(f"smallest area: {smallest_area}")
-        print(f"largest area:  {largest_area}\n")
+        print(f"smallest area: {stats.smallest_area}")
+        print(f"largest area:  {stats.largest_area}\n")
 
     # Check for multiple objects at one vertex and normal consistency
     for i in range(surface.n_vertices()):
