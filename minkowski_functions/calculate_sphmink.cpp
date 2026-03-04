@@ -1,5 +1,5 @@
 #include "calculate.h"
-#include <math.h>
+#include "../lib/Kmath.h"
 #include <cassert>
 #include <cstring>
 #include <gsl/gsl_complex_math.h>

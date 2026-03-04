@@ -10,7 +10,7 @@
 //!  -+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 
 
-#include <math.h>
+#include "lib/Kmath.h"
 #include <string>
 #include <iostream>
 

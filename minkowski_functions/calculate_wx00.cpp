@@ -1,6 +1,6 @@
 #include "calculate.h"
 #include <cassert>
-#include <math.h>
+#include "../lib/Kmath.h"
 
 CompWiseScalarMinkValResultType calculate_w000(const Triangulation& surface){
     CompWiseScalarMinkValResultType w000;
